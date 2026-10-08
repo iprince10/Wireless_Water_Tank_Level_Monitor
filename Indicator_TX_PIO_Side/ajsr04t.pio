@@ -1,0 +1,38 @@
+.program ajsr04t
+
+    SET PINDIRS, 1      ; addr 0 - GPIO2 becomes output
+
+.wrap_target
+    PULL BLOCK          ; addr 1 - wait for a new measurement timeout value
+    MOV X, OSR          ; addr 2 - load timeout budget
+
+wait_low:
+    JMP PIN, low_count  ; addr 3 - still high, keep waiting for it to settle low
+    JMP pre_trigger      ; addr 4 - confirmed low, safe to trigger
+low_count:
+    JMP X--, wait_low   ; addr 5
+    JMP done             ; addr 6 - timed out waiting for idle low
+
+pre_trigger:
+    SET PINS, 1 [19]    ; addr 7 - 10us trigger at 2MHz PIO clock
+    SET PINS, 0          ; addr 8
+
+wait_high:
+    JMP PIN, echo_start ; addr 9 - real rising edge seen
+    JMP X--, wait_high  ; addr 10
+    JMP done             ; addr 11 - timed out, no echo ever arrived
+
+echo_start:
+    MOV X, OSR          ; addr 12 - fresh full budget for the actual count
+
+count_loop:
+    JMP PIN, still_high ; addr 13
+    JMP done             ; addr 14 - echo fell, done counting
+
+still_high:
+    JMP X--, count_loop ; addr 15
+
+done:
+    MOV ISR, X           ; addr 16
+    PUSH                  ; addr 17
+.wrap
